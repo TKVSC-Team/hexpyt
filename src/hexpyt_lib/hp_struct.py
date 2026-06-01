@@ -25,7 +25,12 @@ hexpat definition:
 {indentation}{indentation}{indentation}_dollar___offset = _dollar___offset.to_dollar()
 {indentation}{indentation}_dollar___offset_copy = _dollar___offset.copy()
 """
-    for (class_name, att_name, array_length, indentation_count) in attributes:
+    for attrib in attributes:
+        class_name = attrib[0]
+        att_name = attrib[1]
+        array_length = attrib[2]
+        indentation_count = attrib[3]
+        custom_offset = attrib[4] if len(attrib) > 4 else "_dollar___offset"
         current_indentation = ""
         for i in range(0, indentation_count):
             current_indentation += f"{indentation}"
@@ -36,7 +41,7 @@ hexpat definition:
             class_name = "Bool"
 
         if class_name == "Padding":
-            string += f"self.{att_name}: {class_name} = {class_name}({array_length}, '{att_name}') @ _dollar___offset\n"
+            string += f"self.{att_name}: {class_name} = {class_name}({array_length}, '{att_name}') @ {custom_offset}\n"
         elif class_name == plain_text:
             if len(att_name) > 0:
                 if att_name[-1] != "\n":
@@ -47,13 +52,13 @@ hexpat definition:
                 string = string[:-indent_len]
         else:
             if array_length == 0:
-                string += f"{att_name}: {class_name} = {class_name}('{att_name}') @ _dollar___offset\n"
+                string += f"{att_name}: {class_name} = {class_name}('{att_name}') @ {custom_offset}\n"
                 string += f"{indentation}{indentation}{current_indentation}"
                 string += f"self.{att_name} = {att_name}\n"
             else:
-                if "while" in array_length:
+                if "while" in str(array_length):
                     array_length = f'"{array_length}"'
-                string += f"{att_name}: Array[{class_name}] = Array({class_name}, {array_length}) @ _dollar___offset\n"
+                string += f"{att_name}: Array[{class_name}] = Array({class_name}, {array_length}) @ {custom_offset}\n"
                 string += f"{indentation}{indentation}{current_indentation}"
                 string += f"self.{att_name} = {att_name}\n"
 
@@ -65,7 +70,9 @@ hexpat definition:
 
 def translate_struct(ts: TranslateState):
     ts.docstring += ts.old_line
-    if ts.cur_line[0] == "}":
+    if not ts.cur_line.strip():
+        return
+    if ts.cur_line.strip()[0] == "}":
         ts.final_string += make_struct(ts.struct_name, ts.attribs, ts.docstring, ts.indentation)
         ts.attribs = []
         ts.current_attribs = []
@@ -80,7 +87,7 @@ def translate_struct(ts: TranslateState):
         if try_padding[0] == "padding":
             length = try_padding[1]
             i = 2
-            while "]" not in try_padding[1]:
+            while "]" not in length and i < len(words):
                 length += words[i]
                 i += 1
             length = length.split("]")[0]
@@ -91,6 +98,9 @@ def translate_struct(ts: TranslateState):
         elif words[0] in ts.type_names:
             class_name = words[0]
             att_name = words[1]
+            custom_offset = "_dollar___offset"
+            if "@" in ts.cur_line:
+                custom_offset = ts.cur_line.split("@")[1].strip().rstrip(";")
             if "[" in att_name:
                 (att_name, length) = att_name.split("[")
                 i = 2
@@ -99,10 +109,10 @@ def translate_struct(ts: TranslateState):
                     i += 1
                 length = length.split("]")[0]
                 length = f"{length}"
-                ts.attribs.append((class_name, att_name, length, ts.indentation_count))
+                ts.attribs.append((class_name, att_name, length, ts.indentation_count, custom_offset))
                 ts.current_attribs.append(att_name)
             else:
-                ts.attribs.append((class_name, att_name, 0, ts.indentation_count))
+                ts.attribs.append((class_name, att_name, 0, ts.indentation_count, custom_offset))
                 ts.current_attribs.append(att_name)
         else:
             if "}" in ts.cur_line:

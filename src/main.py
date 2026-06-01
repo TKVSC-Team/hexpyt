@@ -1,11 +1,41 @@
-from typing import List, Tuple
+"""
+main.py — hexpyt entry point.
+Delegates all compilation to the new compiler.py recursive-descent compiler.
+The old translate_text() API is preserved for backward compatibility.
+"""
+from compiler import compile_text
 
-from hexpyt_lib.hp_namespace import remove_namespaces
-from hexpyt_lib.hp_struct import translate_struct
-from hexpyt_lib.hp_bitfield import translate_bitfield
-from hexpyt_lib.hp_consts import *
-from hexpyt_lib.hp_enum import translate_enum
-from hexpyt_lib.hp_preproc import try_preproc
+
+def translate_text(text: str, indentation: str = "    ", extra_paths=None) -> str:
+    """Compile hexpat source text to Python. Thin wrapper around compiler.compile_text()."""
+    return compile_text(text)
+
+
+def translate_lines(lines, indentation: str = "    ", extra_paths=None) -> str:
+    return compile_text("".join(lines))
+
+
+def translate_text_to_file(text: str, output_file_path: str,
+                           indentation: str = "    ", extra_paths=None):
+    code = compile_text(text)
+    with open(output_file_path, "w", encoding="utf-8") as f:
+        f.write(code)
+
+
+def translate_file(input_file_path: str, output_file_path: str,
+                   indentation: str = "    ", extra_paths=None):
+    with open(input_file_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    translate_text_to_file(text, output_file_path, indentation, extra_paths)
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) >= 3:
+        translate_file(sys.argv[1], sys.argv[2])
+    else:
+        print("Usage: python main.py <input.hexpat> <output.py>")
+
 
 def get_header() -> str:
     final_string = "from primitives import Dollar, Struct, BitField, IntStruct, "

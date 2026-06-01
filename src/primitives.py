@@ -871,9 +871,9 @@ class Array(list[T], Struct):
                 if self[-1].___breaked___ or other.eof():
                     break
         elif "while" in self.___length__:
-            bool_statement = self.___length__.split("while(")[1].split(")")[:-1]
-            bool_statement = ")".join(bool_statement)
-            bool_statement = bool_statement.replace("_dollar___offset", "other")
+            import re
+            m = re.search(r'while\s*\((.*)\)', self.___length__, re.DOTALL)
+            bool_statement = m.group(1).replace("_dollar___offset", "other")
             while eval(bool_statement):
                 self.append(self.___type_____() @ other)
                 if self[-1].___breaked___ or other.eof():
