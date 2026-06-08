@@ -882,6 +882,7 @@ def _subst_body(body: List, param_map: Dict[str, str]) -> List:
                 array_expr=node.array_expr,
                 offset_expr=node.offset_expr,
                 is_auto_array=node.is_auto_array,
+                value_expr=node.value_expr,
             ))
         elif isinstance(node, IfBlock):
             result.append(IfBlock(
@@ -926,6 +927,7 @@ def _flatten_refs_in_body(body: List) -> List:
                 array_expr=node.array_expr,
                 offset_expr=node.offset_expr,
                 is_auto_array=node.is_auto_array,
+                value_expr=node.value_expr,
             ))
         elif isinstance(node, IfBlock):
             result.append(IfBlock(
@@ -1038,6 +1040,9 @@ def expr_to_py(expr: str) -> str:
     # C logical operators already translated during parsing (&&→and etc)
     # $ → int(_dollar___offset)
     expr = re.sub(r'(?<![A-Za-z0-9_])\$(?![A-Za-z0-9_])', 'int(_dollar___offset)', expr)
+    expr = re.sub(r'!(?!=)', ' not ', expr)
+    # Replace std::mem::eof()
+    expr = re.sub(r'\bstd\s*\.\s*mem\s*\.\s*eof\s*\(\s*\)', '_dollar___offset.eof()', expr)
     # Remove leftover namespace dots (e.g. agl . ImageFormat → ImageFormat)
     expr = _NS_QUAL_RE.sub(r'\1', expr)
     return expr.strip()
@@ -1215,6 +1220,16 @@ class CodeGen:
                 self._w(f'self.{name} = {name}')
             else:
                 self._w(f'{name} = None  # dynamic-length array not supported for {py_type}[]')
+        elif f.array_expr is not None:
+            a_expr = expr_to_py(f.array_expr)
+            if a_expr.strip().startswith("while"):
+                import re
+                m = re.search(r'while\s*\((.*)\)', a_expr, re.DOTALL)
+                cond = m.group(1) if m else "True"
+                a_expr = f'lambda _dollar___offset: {cond}'
+            self._w(f'{name}: Array[{py_type}] = Array({py_type}, {a_expr}, \'{name}\') @ {offset_src}')
+            self._w(f'self.{name} = {name}')
+            return
         if f.value_expr is not None:
             vexpr = f.value_expr.strip()
             if vexpr == '$' or vexpr == 'int ( _dollar___offset )':
@@ -1228,8 +1243,9 @@ class CodeGen:
                 return   # <-- add this return so it doesn't fall through to the normal read
             self._w(f'self.{name} = {name}')
         else:
-            self._w(f'{name}: {py_type} = {py_type}(\'{name}\') @ {offset_src}')
-            self._w(f'self.{name} = {name}')
+            if not f.is_auto_array:
+                self._w(f'{name}: {py_type} = {py_type}(\'{name}\') @ {offset_src}')
+                self._w(f'self.{name} = {name}')
 
     def _emit_padding(self, p: PaddingField) -> None:
         size = expr_to_py(p.size_expr)

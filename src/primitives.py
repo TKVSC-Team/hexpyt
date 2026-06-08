@@ -694,11 +694,13 @@ class RealNum(Struct):
             other = other.to_dollar()
         starting_offset = other.copy()
         self.___value_______ = other.read(self.___length________)
+        if len(self.___value_______) < self.___length________:
+            self.___value_______ = self.___value_______.ljust(self.___length________, b'\x00')
         if self.___length________ == 4:
             format_ = "<f"
         elif self.___length________ == 8:
             format_ = "<d"
-        self.___value_______ = struct.unpack(format_, self.___value_______)
+        self.___value_______ = struct.unpack(format_, self.___value_______)[0]
         super().init_struct(starting_offset, other.copy())
         return self
     
@@ -870,7 +872,12 @@ class Array(list[T], Struct):
                 self.append(self.___type_____() @ other)
                 if self[-1].___breaked___ or other.eof():
                     break
-        elif "while" in self.___length__:
+        elif callable(self.___length__):
+            while self.___length__(other):
+                self.append(self.___type_____() @ other)
+                if self[-1].___breaked___ or other.eof():
+                    break
+        elif isinstance(self.___length__, str) and "while" in self.___length__:
             import re
             m = re.search(r'while\s*\((.*)\)', self.___length__, re.DOTALL)
             bool_statement = m.group(1).replace("_dollar___offset", "other")
@@ -928,3 +935,40 @@ def sizeof(struct: Struct) -> int:
 
 def addressof(struct: Struct) -> int:
     return struct.address()
+
+
+class Endian:
+    Little = 0
+    Big = 1
+
+class StdMem:
+    def __init__(self, byts: bytes = b""):
+        self.byts = byts
+        self.Endian = Endian
+
+    def read_unsigned(self, offset: int, size: int, endian: int = 0) -> int:
+        offset_val = int(offset)
+        chunk = self.byts[offset_val : offset_val + size]
+        if len(chunk) < size:
+            chunk = chunk.ljust(size, b'\x00')
+        if endian == 1: # Big endian
+            val = 0
+            for b in chunk:
+                val = (val << 8) | b
+            return val
+        else: # Little endian
+            val = 0
+            for i, b in enumerate(chunk):
+                val += b << (8 * i)
+            return val
+
+    def eof(self, offset: int = 0) -> bool:
+        # Note: hexpat std::mem::eof() does not accept arguments, but std::mem::eof(offset) does.
+        return int(offset) >= len(self.byts)
+
+class Std:
+    def __init__(self):
+        self.mem = StdMem()
+
+std = Std()
+
